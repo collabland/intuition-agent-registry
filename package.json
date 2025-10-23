@@ -28,12 +28,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/agent-registry.git"
+    "url": "https://github.com/collabland/intuition-agent-registry.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/agent-registry/issues"
+    "url": "https://github.com/collabland/intuition-agent-registry/issues"
   },
-  "homepage": "https://github.com/your-username/agent-registry#readme",
+  "homepage": "https://github.com/collabland/intuition-agent-registry#readme",
   "packageManager": "pnpm@10.12.4",
   "engines": {
     "node": ">=18.0.0",
