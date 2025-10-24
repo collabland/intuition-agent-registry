@@ -4,12 +4,11 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-43853D?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-A decentralized agent registry built on the Intuition Protocol. Register, discover, and interact with AI agents in a decentralized manner using blockchain technology.
+A decentralized agent registry built on the Intuition Protocol. Register, discover, and interact with AI agents in a decentralized manner - onchain.
 
 ## ✨ Features
 
 - 🔗 **Decentralized Registry**: Store agent metadata on the blockchain
-- 🔍 **Agent Discovery**: Search for agents by capabilities and trust relationships
 - 🌐 **REST API**: HTTP endpoints for registration and search
 - 🔐 **Secure Authentication**: API key-based authentication
 - 📡 **Webhook Support**: External integration capabilities
@@ -68,7 +67,7 @@ pnpm start
 ### Register an Agent
 
 ```bash
-curl -X POST http://localhost:3000/agents \
+curl -X POST http://localhost:3001/agents \
   -H "Content-Type: application/json" \
   -d '{
     "did:example:myagent": {
@@ -84,7 +83,7 @@ curl -X POST http://localhost:3000/agents \
 ### Search for Agents
 
 ```bash
-curl -X POST http://localhost:3000/agents/search \
+curl -X POST http://localhost:3001/agents/search \
   -H "Content-Type: application/json" \
   -d '{
     "criteria": [
@@ -95,22 +94,206 @@ curl -X POST http://localhost:3000/agents/search \
   }'
 ```
 
-### Webhook Integration
+### Generic Sync (any JSON → flattened with ":")
+
+POST `/v1/intuition/` accepts any JSON object. The payload is flattened into one level using `:` as the key joiner (e.g., `profile:meta:capabilities`). The DID used is derived from `SIGNER` in `.env` (`did:eth:<signer>`). The sync is idempotent; re-sending existing atoms returns 200.
 
 ```bash
-curl -X POST http://localhost:3000/v1/intuition/events \
+# If you run on port 3001, adjust the URL accordingly
+curl -X POST http://localhost:3001/v1/intuition/ \
   -H "Content-Type: application/json" \
-  -H "x-api-key: your_api_key_here" \
+  -H "x-api-key: $API_KEY" \
   -d '{
-    "type": "quiz_completed",
-    "userAddress": "0x...",
-    "communityId": "...",
-    "metadata": {
-      "quizId": "...",
-      "completedAt": "..."
+    "type": "agent",
+    "profile": {
+      "name": "Alpha",
+      "meta": { "capabilities": ["web_search", {"nested": "obj"}] }
     },
-    "version": "1.0.0"
+    "score": 42
   }'
+```
+
+JavaScript (fetch):
+
+```javascript
+await fetch('http://localhost:3001/v1/intuition/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({
+    type: 'agent',
+    profile: { name: 'Alpha', meta: { capabilities: ['web_search', { nested: 'obj' }] } },
+    score: 42,
+  }),
+});
+```
+
+Resulting on-chain key/value pairs (example):
+
+```
+{
+  "type": "agent",
+  "profile:name": "Alpha",
+  "profile:meta:capabilities": ["web_search", "{\"nested\":\"obj\"}"],
+  "score": "42"
+}
+```
+
+### Agent Sync from URL (fetch JSON → flatten with ":")
+
+POST `/v1/intuition/agent` with body `{ "url": "https://.../agent.json" }`. The server fetches JSON from the URL, flattens it using `:`, and syncs under the `SIGNER` DID. Idempotent: existing atoms return 200 with a no-op message.
+
+```bash
+curl -X POST http://localhost:3001/v1/intuition/agent \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{"url":"https://system-integration.telex.im/chessagent/.well-known/agent.json"}'
+```
+
+Raw string (text/plain) URL body:
+
+```bash
+curl -X POST http://localhost:3001/v1/intuition/agent \
+  -H "Content-Type: text/plain" \
+  -H "x-api-key: $API_KEY" \
+  --data-binary 'https://system-integration.telex.im/chessagent/.well-known/agent.json'
+```
+
+JavaScript (fetch):
+
+```javascript
+await fetch('http://localhost:3001/v1/intuition/agent', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({ url: 'https://system-integration.telex.im/chessagent/.well-known/agent.json' }),
+});
+
+// text/plain raw URL variant
+await fetch('http://localhost:3001/v1/intuition/agent', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/plain',
+    'x-api-key': API_KEY,
+  },
+  body: 'https://system-integration.telex.im/chessagent/.well-known/agent.json',
+});
+```
+
+Notes:
+- JSON is required at the URL; non-JSON returns 415.
+- Upstream timeouts are 15s (504).
+- The DID is `did:eth:<SIGNER>`. Keys use the `:` joiner.
+- Re-sending the same data is treated as success (idempotent no-op).
+
+### Search Endpoint (flatten JSON or URL → criteria)
+
+POST `/v1/intuition/search` accepts either:
+- A JSON object (nested allowed; it will be flattened with `:`), or
+- A single-key JSON object `{ "URL": "https://.../criteria.json" }` (server fetches JSON), or
+- A raw string body (text/plain) that is a URL.
+
+The flattened map becomes search criteria: each key/value pair turns into `{ key: value }`. Arrays produce multiple criteria entries for the same key. Searches are scoped by your `SIGNER` as the trusted account.
+
+Examples:
+
+```bash
+# 1) Direct JSON body (multiple criteria)
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "type": "agent",
+    "capabilities": "web_search"
+  }'
+
+# 2) Nested JSON body (flattened with ':')
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "profile": { "meta": { "capabilities": ["web_search", "coding"] } }
+  }'
+
+# 3) URL wrapper (server fetches JSON from URL)
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{"URL":"https://example.com/criteria.json"}'
+
+# 4) Raw string body (text/plain) that is a URL
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: text/plain" \
+  -H "x-api-key: $API_KEY" \
+  --data-binary 'https://example.com/criteria.json'
+```
+
+JavaScript (fetch):
+
+```javascript
+// 1) Direct JSON body
+await fetch('http://localhost:3001/v1/intuition/search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({ type: 'agent', capabilities: 'web_search' }),
+});
+
+// 2) URL wrapper
+await fetch('http://localhost:3001/v1/intuition/search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({ URL: 'https://example.com/criteria.json' }),
+});
+
+// 3) Raw string body (text/plain URL)
+await fetch('http://localhost:3001/v1/intuition/search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/plain',
+    'x-api-key': API_KEY,
+  },
+  body: 'https://example.com/criteria.json',
+});
+```
+
+Response (shape):
+
+```
+{
+  "success": true,
+  "count": 1,
+  "criteria": [{ "type": "agent" }, { "capabilities": "web_search" }],
+  "trusted": ["0x...SIGNER"],
+  "result": { /* SDK response */ }
+}
+```
+
+### Port and API key
+
+- Default port is 3001; set `PORT=3001` (or any) in `.env` to change.
+- Include `x-api-key` in requests. You can export from `.env`:
+
+```bash
+export API_KEY=$(grep '^API_KEY=' .env | cut -d= -f2)
+```
+
+### Search script
+
+Run the sample search against the Intuition testnet using your `SIGNER`:
+
+```bash
+pnpm run search
+# or: npx tsx src/search.ts
 ```
 
 ## 🏗️ Architecture
@@ -123,19 +306,11 @@ The Agent Registry is built on the Intuition Protocol, which provides:
 
 ### Tech Stack
 
-- **Blockchain**: Intuition Testnet (Chain ID: 13579)
+- **Chain**: Intuition Testnet (Chain ID: 13579)
 - **Backend**: Express.js with TypeScript
 - **Ethereum Library**: Viem 2.31.4
 - **Protocol SDK**: @0xintuition/sdk
 - **Runtime**: Node.js with tsx
-
-## 📚 Documentation
-
-- [API Documentation](./docs/API.md) - Complete API reference
-- [Deployment Guide](./docs/DEPLOYMENT.md) - Production deployment
-- [Security Guide](./docs/SECURITY.md) - Security best practices
-- [Architecture Overview](./docs/ARCHITECTURE.md) - Technical details
-- [Examples](./examples/) - Usage examples and tutorials
 
 ## 🚀 Deployment
 
