@@ -152,6 +152,15 @@ curl -X POST http://localhost:3001/v1/intuition/agent \
   -d '{"url":"https://system-integration.telex.im/chessagent/.well-known/agent.json"}'
 ```
 
+Raw string (text/plain) URL body:
+
+```bash
+curl -X POST http://localhost:3001/v1/intuition/agent \
+  -H "Content-Type: text/plain" \
+  -H "x-api-key: $API_KEY" \
+  --data-binary 'https://system-integration.telex.im/chessagent/.well-known/agent.json'
+```
+
 JavaScript (fetch):
 
 ```javascript
@@ -162,6 +171,16 @@ await fetch('http://localhost:3001/v1/intuition/agent', {
     'x-api-key': API_KEY,
   },
   body: JSON.stringify({ url: 'https://system-integration.telex.im/chessagent/.well-known/agent.json' }),
+});
+
+// text/plain raw URL variant
+await fetch('http://localhost:3001/v1/intuition/agent', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/plain',
+    'x-api-key': API_KEY,
+  },
+  body: 'https://system-integration.telex.im/chessagent/.well-known/agent.json',
 });
 ```
 
