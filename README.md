@@ -141,6 +141,60 @@ Notes:
 - The DID is `did:eth:<SIGNER>`. Keys use the `:` joiner.
 - Re-sending the same data is treated as success (idempotent no-op).
 
+### Search Endpoint (flatten JSON or URL → criteria)
+
+POST `/v1/intuition/search` accepts either:
+- A JSON object (nested allowed; it will be flattened with `:`), or
+- A single-key JSON object `{ "URL": "https://.../criteria.json" }` (server fetches JSON), or
+- A raw string body (text/plain) that is a URL.
+
+The flattened map becomes search criteria: each key/value pair turns into `{ key: value }`. Arrays produce multiple criteria entries for the same key. Searches are scoped by your `SIGNER` as the trusted account.
+
+Examples:
+
+```bash
+# 1) Direct JSON body (multiple criteria)
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "type": "agent",
+    "capabilities": "web_search"
+  }'
+
+# 2) Nested JSON body (flattened with ':')
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{
+    "profile": { "meta": { "capabilities": ["web_search", "coding"] } }
+  }'
+
+# 3) URL wrapper (server fetches JSON from URL)
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -d '{"URL":"https://example.com/criteria.json"}'
+
+# 4) Raw string body (text/plain) that is a URL
+curl -X POST http://localhost:3001/v1/intuition/search \
+  -H "Content-Type: text/plain" \
+  -H "x-api-key: $API_KEY" \
+  --data-binary 'https://example.com/criteria.json'
+```
+
+Response (shape):
+
+```
+{
+  "success": true,
+  "count": 1,
+  "criteria": [{ "type": "agent" }, { "capabilities": "web_search" }],
+  "trusted": ["0x...SIGNER"],
+  "result": { /* SDK response */ }
+}
+```
+
 ### Port and API key
 
 - Default port is 3001; set `PORT=3001` (or any) in `.env` to change.
