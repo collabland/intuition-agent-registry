@@ -113,6 +113,23 @@ curl -X POST http://localhost:3001/v1/intuition/ \
   }'
 ```
 
+JavaScript (fetch):
+
+```javascript
+await fetch('http://localhost:3001/v1/intuition/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({
+    type: 'agent',
+    profile: { name: 'Alpha', meta: { capabilities: ['web_search', { nested: 'obj' }] } },
+    score: 42,
+  }),
+});
+```
+
 Resulting on-chain key/value pairs (example):
 
 ```
@@ -133,6 +150,19 @@ curl -X POST http://localhost:3001/v1/intuition/agent \
   -H "Content-Type: application/json" \
   -H "x-api-key: $API_KEY" \
   -d '{"url":"https://system-integration.telex.im/chessagent/.well-known/agent.json"}'
+```
+
+JavaScript (fetch):
+
+```javascript
+await fetch('http://localhost:3001/v1/intuition/agent', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({ url: 'https://system-integration.telex.im/chessagent/.well-known/agent.json' }),
+});
 ```
 
 Notes:
@@ -181,6 +211,40 @@ curl -X POST http://localhost:3001/v1/intuition/search \
   -H "Content-Type: text/plain" \
   -H "x-api-key: $API_KEY" \
   --data-binary 'https://example.com/criteria.json'
+```
+
+JavaScript (fetch):
+
+```javascript
+// 1) Direct JSON body
+await fetch('http://localhost:3001/v1/intuition/search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({ type: 'agent', capabilities: 'web_search' }),
+});
+
+// 2) URL wrapper
+await fetch('http://localhost:3001/v1/intuition/search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  },
+  body: JSON.stringify({ URL: 'https://example.com/criteria.json' }),
+});
+
+// 3) Raw string body (text/plain URL)
+await fetch('http://localhost:3001/v1/intuition/search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/plain',
+    'x-api-key': API_KEY,
+  },
+  body: 'https://example.com/criteria.json',
+});
 ```
 
 Response (shape):
