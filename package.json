@@ -37,9 +37,9 @@
   "homepage": "https://github.com/collabland/intuition-agent-registry#readme",
   "packageManager": "pnpm@10.12.4",
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
+    "node": "20.x"
   },
+  "corepack": true,
   "dependencies": {
     "@0xintuition/graphql": "2.0.0-alpha.0",
     "@0xintuition/protocol": "2.0.0-alpha.0",
