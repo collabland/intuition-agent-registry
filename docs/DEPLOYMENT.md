@@ -2,11 +2,30 @@
 
 This guide covers various deployment options for the Agent Registry.
 
-## 🚀 Quick Deploy Options
+## 🤖 Automated Deployment (Recommended)
+
+### GitHub Actions → Heroku
+
+**Automatic deployment on every push to main branch!**
+
+For complete setup instructions, see: **[GitHub Actions Deployment Guide](./GITHUB_ACTIONS_DEPLOYMENT.md)**
+
+**Quick Setup:**
+
+1. Create a Heroku app
+2. Add three GitHub secrets: `HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`
+3. Push to main branch - automatic deployment!
+
+The workflow is already configured in `.github/workflows/heroku-deploy.yml`.
+
+---
+
+## 🚀 Manual Deploy Options
 
 ### Heroku (Recommended)
 
 **Prerequisites:**
+
 - Heroku CLI installed
 - Git repository
 - Environment variables configured
@@ -14,6 +33,7 @@ This guide covers various deployment options for the Agent Registry.
 **Steps:**
 
 1. **Install Heroku CLI**
+
    ```bash
    # macOS
    brew tap heroku/brew && brew install heroku
@@ -22,12 +42,14 @@ This guide covers various deployment options for the Agent Registry.
    ```
 
 2. **Login and Create App**
+
    ```bash
    heroku login
    heroku create your-agent-registry
    ```
 
 3. **Set Environment Variables**
+
    ```bash
    # Generate API key
    API_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
@@ -39,11 +61,13 @@ This guide covers various deployment options for the Agent Registry.
    ```
 
 4. **Deploy**
+
    ```bash
    git push heroku main
    ```
 
 5. **Verify**
+
    ```bash
    heroku open
    curl https://your-agent-registry.herokuapp.com/health
@@ -54,6 +78,7 @@ This guide covers various deployment options for the Agent Registry.
 ### Docker Deployment
 
 **Build and Run:**
+
 ```bash
 # Build image
 docker build -t agent-registry .
@@ -66,6 +91,7 @@ docker run -p 3000:3000 \
 ```
 
 **Using Docker Compose:**
+
 ```bash
 # Copy environment file
 cp env.example .env
@@ -80,6 +106,7 @@ docker-compose up -d
 ### VPS/Cloud Deployment
 
 **Prerequisites:**
+
 - Ubuntu 20.04+ or similar
 - Node.js 18+
 - PM2 (process manager)
@@ -87,6 +114,7 @@ docker-compose up -d
 **Steps:**
 
 1. **Server Setup**
+
    ```bash
    # Update system
    sudo apt update && sudo apt upgrade -y
@@ -100,6 +128,7 @@ docker-compose up -d
    ```
 
 2. **Deploy Application**
+
    ```bash
    # Clone repository
    git clone https://github.com/your-username/agent-registry.git
@@ -114,6 +143,7 @@ docker-compose up -d
    ```
 
 3. **Start with PM2**
+
    ```bash
    # Start application
    pm2 start src/server.ts --name agent-registry
@@ -124,6 +154,7 @@ docker-compose up -d
    ```
 
 4. **Setup Nginx (Optional)**
+
    ```bash
    # Install Nginx
    sudo apt install nginx
@@ -133,6 +164,7 @@ docker-compose up -d
    ```
 
    **Nginx Configuration:**
+
    ```nginx
    server {
        listen 80;
@@ -212,6 +244,7 @@ curl http://localhost:3000/health
 ### Monitoring Setup
 
 **PM2 Monitoring:**
+
 ```bash
 # View logs
 pm2 logs agent-registry
@@ -224,6 +257,7 @@ pm2 restart agent-registry
 ```
 
 **Docker Monitoring:**
+
 ```bash
 # View logs
 docker logs agent-registry
@@ -269,12 +303,14 @@ docker stats agent-registry
 ### Production Optimizations
 
 1. **Node.js Settings**
+
    ```bash
    # Increase memory limit
    NODE_OPTIONS="--max-old-space-size=2048"
    ```
 
 2. **PM2 Configuration**
+
    ```javascript
    // ecosystem.config.js
    module.exports = {
@@ -291,6 +327,7 @@ docker stats agent-registry
    ```
 
 3. **Nginx Optimization**
+
    ```nginx
    # Add to nginx.conf
    gzip on;
@@ -308,6 +345,7 @@ docker stats agent-registry
 ### Common Issues
 
 **1. Port Already in Use**
+
 ```bash
 # Find process using port
 lsof -i :3000
@@ -317,6 +355,7 @@ kill -9 <PID>
 ```
 
 **2. Environment Variables Not Loading**
+
 ```bash
 # Check if .env file exists
 ls -la .env
@@ -327,6 +366,7 @@ echo $API_KEY
 ```
 
 **3. Blockchain Connection Issues**
+
 ```bash
 # Check network connectivity
 curl -X POST https://testnet.rpc.intuition.systems/http
@@ -336,6 +376,7 @@ node -e "console.log(process.env.SIGNER?.startsWith('0x'))"
 ```
 
 **4. API Key Authentication Failing**
+
 ```bash
 # Test API key
 curl -X POST http://localhost:3000/v1/intuition/events \
@@ -347,6 +388,7 @@ curl -X POST http://localhost:3000/v1/intuition/events \
 ### Log Analysis
 
 **View Application Logs:**
+
 ```bash
 # PM2 logs
 pm2 logs agent-registry --lines 100
@@ -370,6 +412,7 @@ heroku logs --tail
    - Health check configuration
 
 2. **Multiple Instances**
+
    ```bash
    # Start multiple PM2 instances
    pm2 start src/server.ts -i max

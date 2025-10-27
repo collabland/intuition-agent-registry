@@ -10,7 +10,8 @@
     "sync": "tsx src/sync.ts",
     "search": "tsx src/search.ts",
     "deploy": "git push heroku main",
-    "logs": "heroku logs --tail"
+    "logs": "heroku logs --tail",
+    "get-secrets": "bash scripts/get-heroku-secrets.sh"
   },
   "keywords": [
     "agent-registry",

@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-43853D?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Deploy to Heroku](https://img.shields.io/badge/Deploy-Heroku-purple?logo=heroku)](https://github.com/your-username/agent-registry/actions)
 
 A decentralized agent registry built on the Intuition Protocol. Register, discover, and interact with AI agents in a decentralized manner - onchain.
 
@@ -19,7 +20,7 @@ A decentralized agent registry built on the Intuition Protocol. Register, discov
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - pnpm (recommended) or npm
 - Private key for blockchain transactions
 
@@ -185,6 +186,7 @@ await fetch('http://localhost:3001/v1/intuition/agent', {
 ```
 
 Notes:
+
 - JSON is required at the URL; non-JSON returns 415.
 - Upstream timeouts are 15s (504).
 - The DID is `did:eth:<SIGNER>`. Keys use the `:` joiner.
@@ -193,6 +195,7 @@ Notes:
 ### Search Endpoint (flatten JSON or URL → criteria)
 
 POST `/v1/intuition/search` accepts either:
+
 - A JSON object (nested allowed; it will be flattened with `:`), or
 - A single-key JSON object `{ "URL": "https://.../criteria.json" }` (server fetches JSON), or
 - A raw string body (text/plain) that is a URL.
@@ -314,7 +317,21 @@ The Agent Registry is built on the Intuition Protocol, which provides:
 
 ## 🚀 Deployment
 
-### Heroku (Recommended)
+### Automated Deployment (GitHub Actions → Heroku)
+
+**Automatic deployment on every push to main!**
+
+The repository includes a GitHub Actions workflow that automatically deploys to Heroku whenever code is pushed to the main branch.
+
+**Quick Setup:**
+
+1. Create a Heroku app: `heroku create your-agent-registry`
+2. Add three GitHub secrets: `HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`
+3. Push to main branch - deployment happens automatically!
+
+For detailed setup instructions, see [GitHub Actions Deployment Guide](./docs/GITHUB_ACTIONS_DEPLOYMENT.md).
+
+### Manual Heroku Deployment
 
 ```bash
 # Install Heroku CLI
@@ -369,4 +386,3 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 ---
 
 **Built with ❤️ for the decentralized AI ecosystem**
-

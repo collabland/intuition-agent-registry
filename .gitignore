@@ -105,3 +105,4 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+GITHUB_SECRETS.txt
