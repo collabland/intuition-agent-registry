@@ -38,15 +38,13 @@ jobs:
           fi
         continue-on-error: true
 
+      - name: Add Heroku remote
+        run: |
+          git remote add heroku https://heroku:${{ secrets.HEROKU_API_KEY }}@git.heroku.com/${{ secrets.HEROKU_APP_NAME }}.git || true
+
       - name: Deploy to Heroku
-        uses: akhileshns/heroku-deploy@v3.13.15
-        with:
-          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
-          heroku_email: ${{ secrets.HEROKU_EMAIL }}
-          usedocker: false
-          dontautocreate: true
-          buildpack: "https://github.com/heroku/heroku-buildpack-nodejs.git"
+        run: |
+          git push heroku main --force
 
       - name: Verify deployment
         run: |
