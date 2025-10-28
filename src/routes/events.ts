@@ -275,6 +275,8 @@ router.post(
       }
 
       const flatData = flattenToOneLevel(data);
+      // Inject required tag for agent entries
+      (flatData as Record<string, unknown>)["has tag"] = "AI Agent";
       if (Object.keys(flatData).length === 0) {
         res.status(400).json({
           success: false,
