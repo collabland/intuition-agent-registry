@@ -35,7 +35,7 @@ cd agent-registry
 pnpm install
 
 # Copy environment template
-cp .env.example .env
+cp env.example .env
 ```
 
 ### Configuration
