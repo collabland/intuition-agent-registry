@@ -43,7 +43,7 @@
   "dependencies": {
     "@0xintuition/graphql": "2.0.0-alpha.0",
     "@0xintuition/protocol": "2.0.0-alpha.0",
-    "@0xintuition/sdk": "2.0.0-alpha.0",
+    "@0xintuition/sdk": "^2.0.0-alpha.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^4.18.2",

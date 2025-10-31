@@ -7,9 +7,11 @@ async function main() {
   // did:example:123 - can be any identifier, for example - ethereum address
   // key / value pairs currently supported only one level deep (no nested objects)
 
+
   const data = {
-    'did:example:456': {
+    'did:example:789test': {
       type: 'agent',
+      "https://schema.org/keywords": "ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP",
       name: 'Claude',
       description: 'Your ultimate ai assistant',
       url: 'https://agent.example.com/a2a',
