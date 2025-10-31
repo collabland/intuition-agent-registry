@@ -56,7 +56,7 @@ async function main() {
   }
 
   // Posts Agent card with predicate "has tag" and object "AI Agent"
-  normalized["https://schema.org/keywords"] = "ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP"
+  normalized["https://schema.org/keywords"] = ["ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP", "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky"]
 
   const data: Record<string, Record<string, string | string[]>> = {
     [`${payload.name}`]: normalized,
