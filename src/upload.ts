@@ -55,7 +55,7 @@ async function main() {
     }
   }
 
-  // Add required keywords entry
+  // Posts Agent card with predicate "has tag" and object "AI Agent"
   normalized["https://schema.org/keywords"] = "ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP"
 
   const data: Record<string, Record<string, string | string[]>> = {
