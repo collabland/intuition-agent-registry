@@ -5,6 +5,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Lock files from other package managers (project uses pnpm)
+package-lock.json
+yarn.lock
+
 # Environment variables
 .env
 .env.local

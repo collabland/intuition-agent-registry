@@ -15,8 +15,8 @@ importers:
         specifier: 2.0.0-alpha.0
         version: 2.0.0-alpha.0(viem@2.31.4(typescript@5.9.3))
       '@0xintuition/sdk':
-        specifier: 2.0.0-alpha.0
-        version: 2.0.0-alpha.0(react@19.2.0)(viem@2.31.4(typescript@5.9.3))
+        specifier: ^2.0.0-alpha.3
+        version: 2.0.0-alpha.3(react@19.2.0)(viem@2.31.4(typescript@5.9.3))
       cors:
         specifier: ^2.8.5
         version: 2.8.5
@@ -51,13 +51,21 @@ packages:
   '@0xintuition/graphql@2.0.0-alpha.0':
     resolution: {integrity: sha512-HxtfAnhmowkybnl6A3sMTW93wmNum9kJCGfDna3rXATmCW/rpSzlqbwimy6X3QwloP74nFI3xRP8QPPo/smP1A==}
 
+  '@0xintuition/graphql@2.0.0-alpha.3':
+    resolution: {integrity: sha512-4SFHUZeu2OyGUjC3EPqNx0gcjwd7InbYmh/m/5HcbRBBFmHT6eb8xCU+aB3rdBwL5mB3xNxN3pj1npMAKlIv4w==}
+
   '@0xintuition/protocol@2.0.0-alpha.0':
     resolution: {integrity: sha512-+v6IJDIrvDIhd6adyDWGixGrERTVq0NG5BWOQ+vDWXGuMa43ayTjZTRm6aNHts2zeciZMx7vWe3rfm4fCMR/4A==}
     peerDependencies:
       viem: ^2.0.0
 
-  '@0xintuition/sdk@2.0.0-alpha.0':
-    resolution: {integrity: sha512-7eCQZuO31A4DFExUt7m3F030DJmx1UzXV3AL8UCtNVRQs4IKRkTDfD6s/1p9unS/ka0gqztd9rCC8iGM4ygc5Q==}
+  '@0xintuition/protocol@2.0.0-alpha.3':
+    resolution: {integrity: sha512-rUQ/z9ah4cPK3Fg1F+r9ZPNUGxmHynX9TZUL+tZcRuaxadYOA5RW3oB4Nf9JXmBQYNBpjzjrmsGOqP8WmLUDnA==}
+    peerDependencies:
+      viem: ^2.0.0
+
+  '@0xintuition/sdk@2.0.0-alpha.3':
+    resolution: {integrity: sha512-RSwarifJdQ/62dym1NAjMmsaEHrlKPv4Tt8nNGvYZ/w50RCTn+wlh0jOSOMIsN/Y6Kp7HTxrXGiY8ZAjm1mdQA==}
     peerDependencies:
       viem: ^2.0.0
 
@@ -996,14 +1004,28 @@ snapshots:
       - encoding
       - react
 
+  '@0xintuition/graphql@2.0.0-alpha.3(react@19.2.0)':
+    dependencies:
+      '@graphql-codegen/typescript-document-nodes': 4.0.16(graphql@16.11.0)
+      '@tanstack/react-query': 5.90.5(react@19.2.0)
+      graphql: 16.11.0
+      graphql-request: 7.3.1(graphql@16.11.0)
+    transitivePeerDependencies:
+      - encoding
+      - react
+
   '@0xintuition/protocol@2.0.0-alpha.0(viem@2.31.4(typescript@5.9.3))':
     dependencies:
       viem: 2.31.4(typescript@5.9.3)
 
-  '@0xintuition/sdk@2.0.0-alpha.0(react@19.2.0)(viem@2.31.4(typescript@5.9.3))':
+  '@0xintuition/protocol@2.0.0-alpha.3(viem@2.31.4(typescript@5.9.3))':
     dependencies:
-      '@0xintuition/graphql': 2.0.0-alpha.0(react@19.2.0)
-      '@0xintuition/protocol': 2.0.0-alpha.0(viem@2.31.4(typescript@5.9.3))
+      viem: 2.31.4(typescript@5.9.3)
+
+  '@0xintuition/sdk@2.0.0-alpha.3(react@19.2.0)(viem@2.31.4(typescript@5.9.3))':
+    dependencies:
+      '@0xintuition/graphql': 2.0.0-alpha.3(react@19.2.0)
+      '@0xintuition/protocol': 2.0.0-alpha.3(viem@2.31.4(typescript@5.9.3))
       viem: 2.31.4(typescript@5.9.3)
     transitivePeerDependencies:
       - encoding
