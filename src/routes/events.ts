@@ -86,6 +86,7 @@ async function handleQuizCompletedEvent(event: QuizCompletedEvent) {
   const syncData = {
     [did]: {
       type: "quiz_completion",
+      "https://schema.org/keywords": "ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP",
       user_address: event.userAddress,
       community_id: event.communityId,
       quiz_id: event.metadata.quizId,
