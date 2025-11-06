@@ -36,6 +36,16 @@ async function main() {
   console.log("Searching with criteria...");
   const agentResult = await search(criteria, [account.address]);
   console.dir(agentResult, { depth: 10 });
+
+  // console.log('Searching for agents...')
+  // const agentResult = await search([
+  //   { type: 'agent' },
+  //   { capabilities: 'web_search' },
+  // ], [account.address])
+  // const agentResult = await search([
+  //   { "https://schema.org/keywords": "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky" }
+  // ], [account.address])
+  // console.dir(agentResult, { depth: 10 })
 }
 
 main().catch((e) => console.error(e));

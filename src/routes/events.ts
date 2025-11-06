@@ -1,8 +1,8 @@
 import { sync, search } from "@0xintuition/sdk";
 import { Request, Response, Router, text } from "express";
 import { validateApiKey } from "../middleware/auth.js";
-import { config, account } from "../setup.js";
-import { flattenToOneLevel } from "../utils.js";
+import { intuitionConfig, account } from "../setup.js";
+import { flattenToOneLevel, normalizeFlatValues, isAlreadyExistsError } from "../utils.js";
 import {
   IntuitionEvent,
   QuizCompletedEvent,
@@ -100,7 +100,7 @@ async function handleQuizCompletedEvent(event: QuizCompletedEvent) {
   console.log("  Data:", JSON.stringify(syncData, null, 2));
 
   try {
-    await sync(config, syncData);
+    await sync(intuitionConfig, syncData);
     console.log("✅ Successfully synced to blockchain");
   } catch (error: any) {
     if (isAlreadyExistsError(error)) {
@@ -157,7 +157,7 @@ router.post(
       console.log("  Data:", JSON.stringify(syncData, null, 2));
 
       try {
-        await sync(config, syncData);
+        await sync(intuitionConfig, syncData);
         res.status(200).json({
           success: true,
           message: "Data received and synced",
@@ -299,7 +299,7 @@ router.post(
       console.log("  Data:", JSON.stringify(syncData, null, 2));
 
       try {
-        await sync(config, syncData);
+        await sync(intuitionConfig, syncData);
         res.status(200).json({
           success: true,
           message: "Agent data fetched and synced",
@@ -492,58 +492,6 @@ router.post(
     }
   }
 );
-
-function normalizeFlatValues(
-  flat: Record<string, unknown>
-): Record<string, string | string[]> {
-  const out: Record<string, string | string[]> = {};
-  for (const [k, v] of Object.entries(flat)) {
-    if (v == null) {
-      out[k] = "";
-      continue;
-    }
-    if (Array.isArray(v)) {
-      out[k] = v.map((item) =>
-        item == null
-          ? ""
-          : typeof item === "string"
-          ? item
-          : typeof item === "number" || typeof item === "boolean"
-          ? String(item)
-          : JSON.stringify(item)
-      );
-      continue;
-    }
-    switch (typeof v) {
-      case "string":
-        out[k] = v;
-        break;
-      case "number":
-      case "boolean":
-        out[k] = String(v);
-        break;
-      default:
-        out[k] = JSON.stringify(v);
-        break;
-    }
-  }
-  return out;
-}
-
-// Detects common "already exists" errors returned by Intuition protocol when
-// attempting to create atoms/triples that are already present on-chain.
-function isAlreadyExistsError(error: any): boolean {
-  const msg = String(error?.message || error || "").toLowerCase();
-  if (msg.includes("multivault_atomexists") || msg.includes("atomexists")) {
-    return true;
-  }
-  // viem wraps revert reasons; check nested fields too
-  const causeMsg = String(error?.cause?.message || "").toLowerCase();
-  if (causeMsg.includes("multivault_atomexists") || causeMsg.includes("atomexists")) {
-    return true;
-  }
-  return false;
-}
 
 // Convert flat key/value map into Intuition SDK search criteria array.
 // Values become strings; for arrays, emit multiple criteria entries for the same key.

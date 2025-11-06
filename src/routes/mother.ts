@@ -1,86 +1,11 @@
-import { sync } from "@0xintuition/sdk";
+import { getAtomDetails, globalSearch, search, sync } from "@0xintuition/sdk";
 import { Request, Response, Router, text } from "express";
 import { validateApiKey } from "../middleware/auth.js";
-import { config, account } from "../setup.js";
-import { flattenToOneLevel } from "../utils.js";
+import { account, intuitionConfig } from "../setup.js";
+import { flattenToOneLevel, normalizeFlatValues, isAlreadyExistsError, mapAtomDetailsToAgentData } from "../utils.js";
+import { checkUrlExists, mintAgentIdentity, isNftIdentifier } from "../services/nft.js";
 
 const router = Router();
-
-// New endpoint: POST /v1/mother/
-// Accepts any-level-deep JSON payload, flattens to one-level key/value pairs,
-// and syncs under the DID derived from SIGNER (account.address)
-router.post(
-  "/v1/mother/",
-  validateApiKey,
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const payload = req.body as unknown;
-
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-        res.status(400).json({
-          success: false,
-          error: "Invalid payload",
-          message: "Expected a JSON object with key/value pairs",
-        });
-        return;
-      }
-
-      // Flatten nested objects into a single-level key/value map.
-      // Arrays are kept as-is. Nested objects inside arrays will be stringified.
-      const flatData = flattenToOneLevel(payload);
-
-      if (Object.keys(flatData).length === 0) {
-        res.status(400).json({
-          success: false,
-          error: "Empty payload",
-          message: "Provided object did not contain any usable key/value pairs",
-        });
-        return;
-      }
-
-      const did = `did:eth:${account.address.toLowerCase()}`;
-      const normalized: Record<string, string | string[]> = normalizeFlatValues(flatData);
-      const syncData: Record<string, Record<string, string | string[]>> = {
-        [did]: normalized,
-      };
-
-      console.log("Syncing generic data to blockchain...");
-      console.log("  DID:", did);
-      console.log("  Data:", JSON.stringify(syncData, null, 2));
-
-      try {
-        await sync(config, syncData);
-        res.status(200).json({
-          success: true,
-          message: "Data received and synced",
-          did,
-          keys: Object.keys(flatData).length,
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      } catch (error: any) {
-        if (isAlreadyExistsError(error)) {
-          res.status(200).json({
-            success: true,
-            message: "Idempotent no-op: data already exists",
-            did,
-            keys: Object.keys(flatData).length,
-            timestamp: new Date().toISOString(),
-          });
-          return;
-        }
-        throw error;
-      }
-    } catch (error: any) {
-      console.error("Generic mother sync error:", error);
-      res.status(500).json({
-        success: false,
-        error: "Sync failed",
-        message: error.message || "Unknown error occurred",
-      });
-    }
-  }
-);
 
 // New endpoint: POST /v1/mother/agent
 // Body: { url: string } → fetches JSON from the URL, flattens with ':' joiner,
@@ -169,7 +94,7 @@ router.post(
 
       const flatData = flattenToOneLevel(data);
       // Inject required tag for agent entries
-      (flatData as Record<string, unknown>)["has tag"] = "AI Agent";
+
       if (Object.keys(flatData).length === 0) {
         res.status(400).json({
           success: false,
@@ -179,25 +104,37 @@ router.post(
         return;
       }
 
-      const did = `did:eth:${account.address.toLowerCase()}`;
+      let nftId: string;
+      const urlCheck = await checkUrlExists(url);
+  
+      if (urlCheck.exists && urlCheck.nftId) {
+        nftId = urlCheck.nftId;
+        console.log("NFT ID already exists:", nftId);
+      } else {
+        console.log(`Minting new NFT for agent card URL: ${url}`);
+        const mintResult= await mintAgentIdentity(url);
+        nftId = mintResult.nftId;
+        console.log("New NFT minted:", nftId);
+      }
+
       const normalized: Record<string, string | string[]> = normalizeFlatValues(flatData);
+
+      normalized["agent_card_url"] = url;
+      normalized["https://schema.org/keywords"] = ["ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP", "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky"];
       const syncData: Record<string, Record<string, string | string[]>> = {
-        [did]: normalized,
+        [nftId]: normalized,
       };
 
       console.log("Syncing agent data from URL to blockchain...");
       console.log("  Source URL:", url);
-      console.log("  DID:", did);
-      console.log("  Data:", JSON.stringify(syncData, null, 2));
+      console.log("  NFT ID (subject):", nftId);
 
       try {
-        await sync(config, syncData);
+        await sync(intuitionConfig, syncData);
         res.status(200).json({
           success: true,
           message: "Agent data fetched and synced",
-          did,
-          keys: Object.keys(flatData).length,
-          source: url,
+          nftId,
           timestamp: new Date().toISOString(),
         });
         return;
@@ -206,9 +143,7 @@ router.post(
           res.status(200).json({
             success: true,
             message: "Idempotent no-op: data already exists",
-            did,
-            keys: Object.keys(flatData).length,
-            source: url,
+            nftId,
             timestamp: new Date().toISOString(),
           });
           return;
@@ -218,6 +153,7 @@ router.post(
     } catch (error: any) {
       const aborted = error?.name === "AbortError";
       console.error("Agent URL sync error:", error);
+
       res.status(aborted ? 504 : 500).json({
         success: false,
         error: aborted ? "Upstream timeout" : "Sync failed",
@@ -227,57 +163,200 @@ router.post(
   }
 );
 
-function normalizeFlatValues(
-  flat: Record<string, unknown>
-): Record<string, string | string[]> {
-  const out: Record<string, string | string[]> = {};
-  for (const [k, v] of Object.entries(flat)) {
-    if (v == null) {
-      out[k] = "";
-      continue;
-    }
-    if (Array.isArray(v)) {
-      out[k] = v.map((item) =>
-        item == null
-          ? ""
-          : typeof item === "string"
-          ? item
-          : typeof item === "number" || typeof item === "boolean"
-          ? String(item)
-          : JSON.stringify(item)
-      );
-      continue;
-    }
-    switch (typeof v) {
-      case "string":
-        out[k] = v;
-        break;
-      case "number":
-      case "boolean":
-        out[k] = String(v);
-        break;
-      default:
-        out[k] = JSON.stringify(v);
-        break;
-    }
-  }
-  return out;
-}
+// GET /v1/mother/agents - Get all Mother-registered agents
+// Query params: ?page=1&limit=20 (optional - if not provided, returns all agents)
+router.get(
+  "/v1/mother/agents",
+  validateApiKey,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      // Parse pagination parameters
+      // Only paginate if page or limit are explicitly provided
+      const hasPagination = req.query.page !== undefined || req.query.limit !== undefined;
+      const page = hasPagination ? Math.max(1, parseInt(req.query.page as string) || 1) : 1;
+      const limit = hasPagination 
+        ? Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20))
+        : Number.MAX_SAFE_INTEGER; // No limit if pagination not requested
+      const offset = hasPagination ? (page - 1) * limit : 0;
 
-// Detects common "already exists" errors returned by Intuition protocol when
-// attempting to create atoms/triples that are already present on-chain.
-function isAlreadyExistsError(error: any): boolean {
-  const msg = String(error?.message || error || "").toLowerCase();
-  if (msg.includes("multivault_atomexists") || msg.includes("atomexists")) {
-    return true;
+      // Search for agents tagged with Mother Open Registry keyword
+      const result = await search(
+        [
+          { "https://schema.org/keywords": "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky" }
+        ],
+        [account.address]
+      );
+
+      // Transform results to include nftId for each agent
+      // NOTE: Maybe update to use validateNftIdentifier instead of isNftIdentifier
+      const allAgents = Object.entries(result)
+        .filter(([subject]) => isNftIdentifier(subject))
+        .map(([nftId, data]) => {        
+          return {
+            nftId,
+            ...data,
+          };
+        });
+
+      // Calculate pagination metadata
+      const total = allAgents.length;
+      const totalPages = hasPagination ? Math.ceil(total / limit) : 1;
+
+      // Only slice if pagination was requested
+      const paginatedAgents = hasPagination 
+        ? allAgents.slice(offset, offset + limit)
+        : allAgents;
+
+      res.status(200).json({
+        success: true,
+        count: paginatedAgents.length,
+        total,
+        ...(hasPagination ? { page, limit, totalPages } : {}), // Only include pagination metadata if pagination was used
+        agents: paginatedAgents,
+      });
+    } catch (error: any) {
+      console.error("Get agents error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch agents",
+        message: error?.message || "Unknown error",
+      });
+    }
   }
-  // viem wraps revert reasons; check nested fields too
-  const causeMsg = String(error?.cause?.message || "").toLowerCase();
-  if (causeMsg.includes("multivault_atomexists") || causeMsg.includes("atomexists")) {
-    return true;
+);
+
+// GET /v1/mother/agent/:nftId - Get agent details by NFT ID (subject)
+router.get(
+  "/v1/mother/agent/:nftId",
+  validateApiKey,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const nftId = req.params.nftId; // NFT ID (subject)
+
+      // Step 1: Get term_id from NFT ID using globalSearch
+      const searchResult = await globalSearch(nftId, {
+        atomsLimit: 1,
+        triplesLimit: 0, // Don't need triples here
+      });
+
+      if (!searchResult?.atoms?.[0]) {
+        res.status(404).json({
+          success: false,
+          error: "Agent not found",
+          message: `No atom found with subject: ${nftId}`,
+        });
+        return;
+      }
+
+      const termId = searchResult.atoms[0].term_id;
+
+      // Step 2: Get atom details using term_id
+      const atomDetails = await getAtomDetails(termId);
+
+      if (!atomDetails) {
+        res.status(404).json({
+          success: false,
+          error: "Agent not found",
+          message: `No atom details found for term_id: ${termId}`,
+        });
+        return;
+      }
+
+      // Step 3: Map atomDetails.as_subject_triples to flat key-value object for UI
+      const agentData = mapAtomDetailsToAgentData(atomDetails);
+
+      res.status(200).json({
+        success: true,
+        nftId,
+        agent: agentData,
+      });
+    } catch (error: any) {
+      console.error("Get agent details error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch agent details",
+        message: error?.message || "Unknown error",
+      });
+    }
   }
-  return false;
-}
+);
 
 export default router;
 
+// POTENTIALLY USEFUL FOR FUTURE
+// New endpoint: POST /v1/mother/
+// Accepts any-level-deep JSON payload, flattens to one-level key/value pairs,
+// and syncs under the DID derived from SIGNER (account.address)
+// router.post(
+//   "/v1/mother/",
+//   validateApiKey,
+//   async (req: Request, res: Response): Promise<void> => {
+//     try {
+//       const payload = req.body as unknown;
+
+//       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+//         res.status(400).json({
+//           success: false,
+//           error: "Invalid payload",
+//           message: "Expected a JSON object with key/value pairs",
+//         });
+//         return;
+//       }
+
+//       // Flatten nested objects into a single-level key/value map.
+//       // Arrays are kept as-is. Nested objects inside arrays will be stringified.
+//       const flatData = flattenToOneLevel(payload);
+
+//       if (Object.keys(flatData).length === 0) {
+//         res.status(400).json({
+//           success: false,
+//           error: "Empty payload",
+//           message: "Provided object did not contain any usable key/value pairs",
+//         });
+//         return;
+//       }
+
+//       const did = `did:eth:${account.address.toLowerCase()}`;
+//       const normalized: Record<string, string | string[]> = normalizeFlatValues(flatData);
+//       normalized["https://schema.org/keywords"] = ["ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP", "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky"];
+//       const syncData: Record<string, Record<string, string | string[]>> = {
+//         [did]: normalized,
+//       };
+
+//       console.log("Syncing generic data to blockchain...");
+//       console.log("  DID:", did);
+//       console.log("  Data:", JSON.stringify(syncData, null, 2));
+
+//       try {
+//         await sync(intuitionConfig, syncData);
+//         res.status(200).json({
+//           success: true,
+//           message: "Data received and synced",
+//           did,
+//           keys: Object.keys(flatData).length,
+//           timestamp: new Date().toISOString(),
+//         });
+//         return;
+//       } catch (error: any) {
+//         if (isAlreadyExistsError(error)) {
+//           res.status(200).json({
+//             success: true,
+//             message: "Idempotent no-op: data already exists",
+//             did,
+//             keys: Object.keys(flatData).length,
+//             timestamp: new Date().toISOString(),
+//           });
+//           return;
+//         }
+//         throw error;
+//       }
+//     } catch (error: any) {
+//       console.error("Generic mother sync error:", error);
+//       res.status(500).json({
+//         success: false,
+//         error: "Sync failed",
+//         message: error.message || "Unknown error occurred",
+//       });
+//     }
+//   }
+// );

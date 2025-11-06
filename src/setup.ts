@@ -10,6 +10,7 @@ import {
   defineChain,
   http,
 } from "viem";
+import { baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 dotenv.config();
 
@@ -62,6 +63,26 @@ const intuitionTestnet = defineChain({
   },
 });
 
+const baseSepoliaChain = baseSepolia;
+
+const baseSepoliaWalletClient = createWalletClient({
+  chain: baseSepoliaChain,
+  transport: http(process.env.BASE_SEPOLIA_RPC_URL),
+  account: account
+});
+
+const baseSepoliaPublicClient = createPublicClient({
+  chain: baseSepoliaChain,
+  transport: http(process.env.BASE_SEPOLIA_RPC_URL),
+});
+
+export const baseSepoliaConfig = {
+  chain: baseSepoliaChain,
+  walletClient: baseSepoliaWalletClient,
+  publicClient: baseSepoliaPublicClient,
+  chainId: baseSepoliaChain.id,
+}
+
 const walletClient = createWalletClient({
   chain: intuitionTestnet,
   transport: http(),
@@ -73,7 +94,7 @@ const publicClient = createPublicClient({
   transport: http(),
 });
 
-export const config: any = {
+export const intuitionConfig: any = {
   walletClient,
   publicClient,
   address: getMultiVaultAddressFromChainId(intuitionTestnet.id),
