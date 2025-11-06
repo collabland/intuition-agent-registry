@@ -76,6 +76,22 @@ export function isAlreadyExistsError(error: any): boolean {
   return false;
 }
 
+function extractSkillTagsFromTriple(triple: any): string[] {
+  if (!triple?.object?.data) return [];
+
+  try {
+    const parsed = JSON.parse(triple.object.data);
+    if (!Array.isArray(parsed?.tags)) return [];
+
+    return parsed.tags
+      .filter((tag: unknown): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Maps atomDetails.as_subject_triples to a flat key-value object for UI display
  * - Uses predicate.data as the key (not predicate.label)
@@ -144,23 +160,10 @@ export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any>
 
       // For skills, parse JSON string
       if (predicate === "skills") {
-        try {
-          const skillObj = JSON.parse(objectData);
-          const existing = Array.isArray(agentData[predicate])
-            ? agentData[predicate]
-            : [];
-          // Check if skill with same id already exists
-          if (
-            !existing.some(
-              (s: any) => s.id && s.id === skillObj.id
-            )
-          ) {
-            existing.push(skillObj);
-            agentData[predicate] = existing;
-          }
-        } catch (e) {
-          // Invalid JSON, skip
-        }
+        const existing = Array.isArray(agentData.skills) ? agentData.skills : [];
+        const tags = extractSkillTagsFromTriple(triple);
+        agentData.skills = Array.from(new Set([...existing, ...tags]));
+        continue;
       } else {
         // For other arrays, add if not duplicate
         const value = objectLabel || objectData;
