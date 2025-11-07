@@ -267,7 +267,7 @@ router.get(
         });
         return;
       }
-
+      console.dir(atomDetails, { depth: null });
       // Step 3: Map atomDetails.as_subject_triples to flat key-value object for UI
       const agentData = mapAtomDetailsToAgentData(atomDetails);
 

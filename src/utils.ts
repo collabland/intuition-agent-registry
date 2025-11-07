@@ -146,6 +146,7 @@ function extractSkillTagsFromTriple(triple: any): string[] {
 export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any> {
   const agentData: Record<string, any> = {};
   const tags: string[] = []; // Special handling for keywords
+  const skillTags: string[] = [];
 
   // Fields to include in the output (whitelist)
   const fieldsToInclude = [
@@ -190,6 +191,14 @@ export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any>
       continue; // Skip normal mapping for keywords
     }
 
+    if (predicate === "skills_tags") {
+      const value = (objectLabel || objectData)?.trim?.();
+      if (value) {
+        skillTags.push(value);
+      }
+      continue;
+    }
+
     // Skip fields not in the whitelist
     if (!fieldsToInclude.includes(predicate)) {
       continue;
@@ -231,9 +240,8 @@ export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any>
   }
 
   // Add tags as a separate field
-  if (tags.length > 0) {
-    agentData["tags"] = tags;
-  }
+  agentData["tags"] = tags;
+  agentData["skill_tags"] = skillTags;
 
   return agentData;
 }
