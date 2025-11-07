@@ -2,7 +2,13 @@ import { getAtomDetails, globalSearch, search, sync } from "@0xintuition/sdk";
 import { Request, Response, Router, text } from "express";
 import { validateApiKey } from "../middleware/auth.js";
 import { account, intuitionConfig } from "../setup.js";
-import { flattenToOneLevel, normalizeFlatValues, isAlreadyExistsError, mapAtomDetailsToAgentData } from "../utils.js";
+import {
+  flattenToOneLevel,
+  normalizeFlatValues,
+  isAlreadyExistsError,
+  mapAtomDetailsToAgentData,
+  collectSkillTagsFromData,
+} from "../utils.js";
 import { checkUrlExists, mintAgentIdentity, isNftIdentifier } from "../services/nft.js";
 
 const router = Router();
@@ -93,7 +99,7 @@ router.post(
       }
 
       const flatData = flattenToOneLevel(data);
-      // Inject required tag for agent entries
+      flatData.skill_tags = collectSkillTagsFromData(data);
 
       if (Object.keys(flatData).length === 0) {
         res.status(400).json({

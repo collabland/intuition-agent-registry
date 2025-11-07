@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { search, getAtomDetails, globalSearch } from "@0xintuition/sdk";
-import { baseSepoliaConfig, account } from "../setup.js";
+import { sepoliaConfig, account } from "../setup.js";
 
 
 // Contract ABI - minimal interface for register function
@@ -173,9 +173,9 @@ export async function mintAgentIdentity(
     throw new Error(`Invalid contract address: ${contractAddress}`);
   }
 
-  // Create provider from baseSepoliaConfig
+  // Create provider from sepoliaConfig
   // Note: We need to convert viem wallet to ethers provider
-  const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL;
+  const rpcUrl = process.env.SEPOLIA_RPC_URL;
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   
   // Get signer from private key
@@ -207,7 +207,7 @@ export async function mintAgentIdentity(
     throw new Error("Failed to extract token ID from transaction receipt");
   }
 
-  const chainId = baseSepoliaConfig.chainId.toString();
+  const chainId = sepoliaConfig.chainId.toString();
   const nftId = formatNftIdentifier(chainId, contractAddress, tokenId);
 
   console.log(`NFT minted successfully: ${nftId}`);

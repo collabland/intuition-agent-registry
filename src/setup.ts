@@ -10,7 +10,7 @@ import {
   defineChain,
   http,
 } from "viem";
-import { baseSepolia } from "viem/chains";
+import { sepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 dotenv.config();
 
@@ -63,25 +63,25 @@ const intuitionTestnet = defineChain({
   },
 });
 
-const baseSepoliaChain = baseSepolia;
+const sepoliaChain = sepolia;
 
-const baseSepoliaWalletClient = createWalletClient({
-  chain: baseSepoliaChain,
-  transport: http(process.env.BASE_SEPOLIA_RPC_URL),
-  account: account
+const sepoliaWalletClient = createWalletClient({
+  chain: sepoliaChain,
+  transport: http(process.env.SEPOLIA_RPC_URL),
+  account: account,
 });
 
-const baseSepoliaPublicClient = createPublicClient({
-  chain: baseSepoliaChain,
-  transport: http(process.env.BASE_SEPOLIA_RPC_URL),
+const sepoliaPublicClient = createPublicClient({
+  chain: sepoliaChain,
+  transport: http(process.env.SEPOLIA_RPC_URL),
 });
 
-export const baseSepoliaConfig = {
-  chain: baseSepoliaChain,
-  walletClient: baseSepoliaWalletClient,
-  publicClient: baseSepoliaPublicClient,
-  chainId: baseSepoliaChain.id,
-}
+export const sepoliaConfig = {
+  chain: sepoliaChain,
+  walletClient: sepoliaWalletClient,
+  publicClient: sepoliaPublicClient,
+  chainId: sepoliaChain.id,
+};
 
 const walletClient = createWalletClient({
   chain: intuitionTestnet,

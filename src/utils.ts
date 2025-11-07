@@ -60,6 +60,49 @@ export function normalizeFlatValues(
   return out;
 }
 
+export function collectSkillTagsFromData(data: unknown): string[] {
+  if (!data || typeof data !== "object") {
+    return [];
+  }
+
+  const skills = (data as any).skills;
+  if (!Array.isArray(skills)) {
+    return [];
+  }
+
+  const tags = new Set<string>();
+  for (const skill of skills) {
+    if (!skill) {
+      continue;
+    }
+
+    let skillObj = skill;
+    if (typeof skill === "string") {
+      try {
+        skillObj = JSON.parse(skill);
+      } catch {
+        continue;
+      }
+    }
+
+    if (!skillObj || typeof skillObj !== "object") {
+      continue;
+    }
+
+    const skillTags = Array.isArray((skillObj as any).tags)
+      ? (skillObj as any).tags
+      : [];
+
+    for (const tag of skillTags) {
+      if (typeof tag === "string" && tag.trim()) {
+        tags.add(tag.trim());
+      }
+    }
+  }
+
+  return Array.from(tags);
+}
+
 // Detects common "already exists" errors returned by Intuition protocol when
 // attempting to create atoms/triples that are already present on-chain.
 export function isAlreadyExistsError(error: any): boolean {
