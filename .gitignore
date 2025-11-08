@@ -110,3 +110,4 @@ Thumbs.db
 tmp/
 temp/
 GITHUB_SECRETS.txt
+package-lock.json
