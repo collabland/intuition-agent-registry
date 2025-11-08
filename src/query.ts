@@ -1,30 +1,6 @@
 import { search } from "@0xintuition/sdk";
 import { account } from "./setup";
-
-function flattenToOneLevel(
-  input: unknown,
-  parentKey = "",
-  result: Record<string, unknown> = {}
-): Record<string, unknown> {
-  if (input && typeof input === "object" && !Array.isArray(input)) {
-    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-      const newKey = parentKey ? `${parentKey}:${key}` : key;
-      if (value && typeof value === "object") {
-        if (Array.isArray(value)) {
-          // Preserve arrays; if they contain objects, stringify them to keep one-level structure
-          result[newKey] = value.map((v) =>
-            v && typeof v === "object" ? JSON.stringify(v) : v
-          );
-        } else {
-          flattenToOneLevel(value, newKey, result);
-        }
-      } else {
-        result[newKey] = value;
-      }
-    }
-  }
-  return result;
-}
+import { flattenToOneLevel } from "./utils.js";
 
 async function main() {
   const url = process.argv[2];
@@ -60,6 +36,16 @@ async function main() {
   console.log("Searching with criteria...");
   const agentResult = await search(criteria, [account.address]);
   console.dir(agentResult, { depth: 10 });
+
+  // console.log('Searching for agents...')
+  // const agentResult = await search([
+  //   { type: 'agent' },
+  //   { capabilities: 'web_search' },
+  // ], [account.address])
+  // const agentResult = await search([
+  //   { "https://schema.org/keywords": "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky" }
+  // ], [account.address])
+  // console.dir(agentResult, { depth: 10 })
 }
 
 main().catch((e) => console.error(e));

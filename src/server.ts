@@ -5,6 +5,7 @@ import express, { NextFunction, Request, Response } from "express";
 // Import routes
 import eventRoutes from "./routes/events.js";
 import healthRoutes from "./routes/health.js";
+import motherRoutes from "./routes/mother.js";
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Register routes
 app.use(healthRoutes);
 app.use(eventRoutes);
+app.use(motherRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
