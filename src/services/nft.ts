@@ -73,52 +73,21 @@ export async function checkUrlExists(
   url: string
 ): Promise<{ exists: boolean; nftId?: string; subject?: string }> {
   try {
-    // Search for existing agent with this URL
-    const result = await search(
-      [{ agent_card_url: url }],
-      [account.address]
-    );
+    const result = await search([{ agent_card_url: url }], [account.address]);
+    const subject = Object.keys(result)[0];
 
-    if (Object.keys(result).length === 0) {
+    if (!subject) {
       return { exists: false };
     }
 
-    // Get the first matching agent (subject)
-    const subject = Object.keys(result)[0];
-    
-    // Try to get atom details to find NFT ID
-    // First, get term_id from subject
-    const searchResult = await globalSearch(subject, {
-      atomsLimit: 1,
-      triplesLimit: 0,
-    });
-
-    if (!searchResult?.atoms?.[0]) {
-      return { exists: true, subject }; // Found but can't get details
+    if (isNftIdentifier(subject)) {
+      return { exists: true, nftId: subject };
     }
 
-    const termId = searchResult.atoms[0].term_id;
-    const atomDetails = await getAtomDetails(termId);
-
-    if (!atomDetails?.as_subject_triples) {
-      return { exists: true, subject }; // Found but no triples
-    }
-
-    // Look for nft_id in triples
-    for (const triple of atomDetails.as_subject_triples) {
-      const predicate = triple.predicate?.data || triple.predicate?.label;
-      if (predicate === "nft_id") {
-        const nftId = triple.object?.data || triple.object?.label;
-        if (nftId && isNftIdentifier(nftId)) {
-          return { exists: true, nftId, subject };
-        }
-      }
-    }
-
-    return { exists: true, subject }; // Found but no NFT ID stored yet
+    return { exists: false };
   } catch (error) {
     console.error("Error checking URL existence:", error);
-    return { exists: false }; // On error, assume doesn't exist (will try to mint)
+    return { exists: false };
   }
 }
 
@@ -162,7 +131,13 @@ export function extractTokenIdFromReceipt(
  */
 export async function mintAgentIdentity(
   url: string
-): Promise<{ chainId: string; contractAddress: string; tokenId: string; nftId: string }> {
+): Promise<{
+  chainId: string;
+  contractAddress: string;
+  tokenId: string;
+  nftId: string;
+  transactionHash: string;
+}> {
   const contractAddress = process.env.AGENT_IDENTITY_CONTRACT_ADDRESS;
   
   if (!contractAddress) {
@@ -217,6 +192,7 @@ export async function mintAgentIdentity(
     contractAddress,
     tokenId,
     nftId,
+    transactionHash: tx.hash,
   };
 }
 

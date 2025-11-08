@@ -111,6 +111,7 @@ router.post(
       }
 
       let nftId: string;
+      let mintTransactionHash: string | undefined;
       const urlCheck = await checkUrlExists(url);
   
       if (urlCheck.exists && urlCheck.nftId) {
@@ -118,8 +119,9 @@ router.post(
         console.log("NFT ID already exists:", nftId);
       } else {
         console.log(`Minting new NFT for agent card URL: ${url}`);
-        const mintResult= await mintAgentIdentity(url);
+        const mintResult = await mintAgentIdentity(url);
         nftId = mintResult.nftId;
+        mintTransactionHash = mintResult.transactionHash;
         console.log("New NFT minted:", nftId);
       }
 
@@ -127,6 +129,11 @@ router.post(
 
       normalized["agent_card_url"] = url;
       normalized["https://schema.org/keywords"] = ["ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP", "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky"];
+
+      if (mintTransactionHash) {
+        normalized["mint_transaction_hash"] = mintTransactionHash;
+      }
+
       const syncData: Record<string, Record<string, string | string[]>> = {
         [nftId]: normalized,
       };
@@ -141,6 +148,7 @@ router.post(
           success: true,
           message: "Agent data fetched and synced",
           nftId,
+          mintTransaction: mintTransactionHash ?? null,
           timestamp: new Date().toISOString(),
         });
         return;
@@ -150,6 +158,7 @@ router.post(
             success: true,
             message: "Idempotent no-op: data already exists",
             nftId,
+            mintTransaction: null,
             timestamp: new Date().toISOString(),
           });
           return;

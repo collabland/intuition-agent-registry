@@ -146,7 +146,7 @@ function extractSkillTagsFromTriple(triple: any): string[] {
 export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any> {
   const agentData: Record<string, any> = {};
   const tags: string[] = []; // Special handling for keywords
-  const skillTags: string[] = [];
+  const skillTags = new Set<string>();
 
   // Fields to include in the output (whitelist)
   const fieldsToInclude = [
@@ -158,6 +158,7 @@ export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any>
     "agent_card_url",
     "provider:organization",
     "provider:url",
+    "mint_transaction_hash",
   ];
 
   // Fields that should be arrays (multiple values expected)
@@ -191,10 +192,10 @@ export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any>
       continue; // Skip normal mapping for keywords
     }
 
-    if (predicate === "skills_tags") {
+    if (predicate === "skill_tags") {
       const value = (objectLabel || objectData)?.trim?.();
       if (value) {
-        skillTags.push(value);
+        skillTags.add(value);
       }
       continue;
     }
@@ -241,7 +242,7 @@ export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any>
 
   // Add tags as a separate field
   agentData["tags"] = tags;
-  agentData["skill_tags"] = skillTags;
+  agentData["skillTags"] = Array.from(skillTags);
 
   return agentData;
 }
