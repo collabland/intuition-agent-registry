@@ -1,0 +1,7 @@
+{
+    "@context": "https://schema.org",
+    "@type": "Thing",
+    "description": "AI agents are autonomous intelligent systems performing specific tasks without human intervention",
+    "name": "AI Agent",
+    "image": "https://res.cloudinary.com/dfpwy9nyv/image/upload/v1732302226/remix/vvnbhazzrozpgg7jykuf.jpg"
+  }
