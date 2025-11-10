@@ -46,7 +46,13 @@ export function parseNftIdentifier(
  * Check if string is a valid NFT identifier format
  */
 export function isNftIdentifier(str: string): boolean {
-  return parseNftIdentifier(str) !== null;
+  const expectedContractAddress = process.env.AGENT_IDENTITY_CONTRACT_ADDRESS;
+
+  const parsed = parseNftIdentifier(str);
+  if (!parsed) return false;
+  if (parsed.contractAddress !== expectedContractAddress) return false;
+  
+  return true;
 }
 
 /**
