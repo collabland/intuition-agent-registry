@@ -13,6 +13,124 @@ import { checkUrlExists, mintAgentIdentity, isNftIdentifier } from "../services/
 
 const router = Router();
 
+type ProcessAgentOptions = {
+  agentCardUrl?: string;
+};
+
+async function processAgentPayload(
+  payload: Record<string, unknown>,
+  options: ProcessAgentOptions = {}
+): Promise<{ nftId: string; mintTransaction: string | null; timestamp: string }> {
+  const flatData = flattenToOneLevel(payload);
+  flatData.skill_tags = collectSkillTagsFromData(payload);
+
+  if (Object.keys(flatData).length === 0) {
+    throw new Error("Provided JSON object did not contain any usable key/value pairs");
+  }
+
+  const normalized: Record<string, string | string[]> = normalizeFlatValues(flatData);
+
+  const agentCardUrl = options.agentCardUrl;
+  if (agentCardUrl) {
+    normalized["agent_card_url"] = agentCardUrl;
+  } else {
+    delete normalized["agent_card_url"];
+  }
+
+  normalized["https://schema.org/keywords"] = [
+    "ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP",
+    "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky",
+  ];
+
+  let nftId: string;
+  let mintTransactionHash: string | undefined;
+
+  if (agentCardUrl) {
+    const urlCheck = await checkUrlExists(agentCardUrl);
+    if (urlCheck.exists && urlCheck.nftId) {
+      nftId = urlCheck.nftId;
+      console.log("NFT ID already exists for provided agent_card_url:", nftId);
+    } else {
+      console.log(`Minting new NFT for agent_card_url: ${agentCardUrl}`);
+      const mintResult = await mintAgentIdentity(agentCardUrl);
+      nftId = mintResult.nftId;
+      mintTransactionHash = mintResult.transactionHash;
+      console.log("New NFT minted:", nftId);
+    }
+  } else {
+    console.log("Minting new NFT for raw JSON submission without agent_card_url");
+    const mintResult = await mintAgentIdentity("raw-json");
+    nftId = mintResult.nftId;
+    mintTransactionHash = mintResult.transactionHash;
+    console.log("New NFT minted:", nftId);
+  }
+
+  if (mintTransactionHash) {
+    normalized["mint_transaction_hash"] = mintTransactionHash;
+  }
+
+  const syncData: Record<string, Record<string, string | string[]>> = {
+    [nftId]: normalized,
+  };
+
+  console.log("Syncing agent data to blockchain...");
+  console.log("  NFT ID (subject):", nftId);
+
+  try {
+    await sync(intuitionConfig, syncData);
+    return {
+      nftId,
+      mintTransaction: mintTransactionHash ?? null,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    if (isAlreadyExistsError(error)) {
+      return {
+        nftId,
+        mintTransaction: null,
+        timestamp: new Date().toISOString(),
+      };
+    }
+    throw error;
+  }
+}
+
+// POST /v1/mother - Accept raw JSON payloads, mint an NFT, and sync to Intuition
+router.post(
+  "/v1/mother",
+  validateApiKey,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const payload = req.body as unknown;
+
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid payload",
+          message: "Expected a JSON object with key/value pairs",
+        });
+        return;
+      }
+
+      const result = await processAgentPayload(payload as Record<string, unknown>);
+
+      res.status(200).json({
+        success: true,
+        message: "Agent data received and synced",
+        ...result,
+      });
+      return;
+    } catch (error: any) {
+      console.error("Raw JSON agent sync error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Sync failed",
+        message: error?.message || "Unknown error occurred",
+      });
+    }
+  }
+);
+
 // New endpoint: POST /v1/mother/agent
 // Body: { url: string } → fetches JSON from the URL, flattens with ':' joiner,
 // and syncs under the DID derived from SIGNER (account.address)
@@ -98,73 +216,16 @@ router.post(
         return;
       }
 
-      const flatData = flattenToOneLevel(data);
-      flatData.skill_tags = collectSkillTagsFromData(data);
+      const result = await processAgentPayload(data as Record<string, unknown>, {
+        agentCardUrl: url,
+      });
 
-      if (Object.keys(flatData).length === 0) {
-        res.status(400).json({
-          success: false,
-          error: "Empty data",
-          message: "Fetched JSON did not contain any usable key/value pairs",
-        });
-        return;
-      }
-
-      let nftId: string;
-      let mintTransactionHash: string | undefined;
-      const urlCheck = await checkUrlExists(url);
-  
-      if (urlCheck.exists && urlCheck.nftId) {
-        nftId = urlCheck.nftId;
-        console.log("NFT ID already exists:", nftId);
-      } else {
-        console.log(`Minting new NFT for agent card URL: ${url}`);
-        const mintResult = await mintAgentIdentity(url);
-        nftId = mintResult.nftId;
-        mintTransactionHash = mintResult.transactionHash;
-        console.log("New NFT minted:", nftId);
-      }
-
-      const normalized: Record<string, string | string[]> = normalizeFlatValues(flatData);
-
-      normalized["agent_card_url"] = url;
-      normalized["https://schema.org/keywords"] = ["ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP", "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky"];
-
-      if (mintTransactionHash) {
-        normalized["mint_transaction_hash"] = mintTransactionHash;
-      }
-
-      const syncData: Record<string, Record<string, string | string[]>> = {
-        [nftId]: normalized,
-      };
-
-      console.log("Syncing agent data from URL to blockchain...");
-      console.log("  Source URL:", url);
-      console.log("  NFT ID (subject):", nftId);
-
-      try {
-        await sync(intuitionConfig, syncData);
-        res.status(200).json({
-          success: true,
-          message: "Agent data fetched and synced",
-          nftId,
-          mintTransaction: mintTransactionHash ?? null,
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      } catch (error: any) {
-        if (isAlreadyExistsError(error)) {
-          res.status(200).json({
-            success: true,
-            message: "Idempotent no-op: data already exists",
-            nftId,
-            mintTransaction: null,
-            timestamp: new Date().toISOString(),
-          });
-          return;
-        }
-        throw error;
-      }
+      res.status(200).json({
+        success: true,
+        message: "Agent data fetched and synced",
+        ...result,
+      });
+      return;
     } catch (error: any) {
       const aborted = error?.name === "AbortError";
       console.error("Agent URL sync error:", error);
@@ -297,81 +358,3 @@ router.get(
 );
 
 export default router;
-
-// POTENTIALLY USEFUL FOR FUTURE
-// New endpoint: POST /v1/mother/
-// Accepts any-level-deep JSON payload, flattens to one-level key/value pairs,
-// and syncs under the DID derived from SIGNER (account.address)
-// router.post(
-//   "/v1/mother/",
-//   validateApiKey,
-//   async (req: Request, res: Response): Promise<void> => {
-//     try {
-//       const payload = req.body as unknown;
-
-//       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-//         res.status(400).json({
-//           success: false,
-//           error: "Invalid payload",
-//           message: "Expected a JSON object with key/value pairs",
-//         });
-//         return;
-//       }
-
-//       // Flatten nested objects into a single-level key/value map.
-//       // Arrays are kept as-is. Nested objects inside arrays will be stringified.
-//       const flatData = flattenToOneLevel(payload);
-
-//       if (Object.keys(flatData).length === 0) {
-//         res.status(400).json({
-//           success: false,
-//           error: "Empty payload",
-//           message: "Provided object did not contain any usable key/value pairs",
-//         });
-//         return;
-//       }
-
-//       const did = `did:eth:${account.address.toLowerCase()}`;
-//       const normalized: Record<string, string | string[]> = normalizeFlatValues(flatData);
-//       normalized["https://schema.org/keywords"] = ["ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP", "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky"];
-//       const syncData: Record<string, Record<string, string | string[]>> = {
-//         [did]: normalized,
-//       };
-
-//       console.log("Syncing generic data to blockchain...");
-//       console.log("  DID:", did);
-//       console.log("  Data:", JSON.stringify(syncData, null, 2));
-
-//       try {
-//         await sync(intuitionConfig, syncData);
-//         res.status(200).json({
-//           success: true,
-//           message: "Data received and synced",
-//           did,
-//           keys: Object.keys(flatData).length,
-//           timestamp: new Date().toISOString(),
-//         });
-//         return;
-//       } catch (error: any) {
-//         if (isAlreadyExistsError(error)) {
-//           res.status(200).json({
-//             success: true,
-//             message: "Idempotent no-op: data already exists",
-//             did,
-//             keys: Object.keys(flatData).length,
-//             timestamp: new Date().toISOString(),
-//           });
-//           return;
-//         }
-//         throw error;
-//       }
-//     } catch (error: any) {
-//       console.error("Generic mother sync error:", error);
-//       res.status(500).json({
-//         success: false,
-//         error: "Sync failed",
-//         message: error.message || "Unknown error occurred",
-//       });
-//     }
-//   }
-// );
