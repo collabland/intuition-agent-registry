@@ -1,6 +1,6 @@
 import { findAtomIds, sync } from '@0xintuition/sdk';
 import { intuitionConfig } from './setup';
-import { flattenToOneLevel, normalizeFlatValues, isAlreadyExistsError } from './utils.js';
+import { flattenToOneLevel, normalizeFlatValues, collectSkillTagsFromData, isAlreadyExistsError } from './utils.js';
 import { checkUrlExists, mintAgentIdentity } from './services/nft.js';
 
 async function main() {
@@ -17,6 +17,7 @@ async function main() {
   const payload = await response.json();
 
   const flattened = flattenToOneLevel(payload);
+  flattened.skill_tags = collectSkillTagsFromData(payload);
 
   // Check if URL already exists or mint new NFT (before normalizing)
   let nftId: string;

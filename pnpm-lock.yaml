@@ -29,6 +29,9 @@ importers:
       express:
         specifier: ^4.18.2
         version: 4.21.2
+      pinata:
+        specifier: ^2.5.1
+        version: 2.5.1(react@19.2.0)
       tsx:
         specifier: ^4.20.3
         version: 4.20.6
@@ -844,6 +847,18 @@ packages:
 
   path-to-regexp@0.1.12:
     resolution: {integrity: sha512-RA1GjUVMnvYFxuqovrEqZoxxW5NUZqbwKtYz/Tt7nXerk0LbLblQmrsgdeOxV5SFHf0UDggjS/bSeOZwt1pmEQ==}
+
+  pinata@2.5.1:
+    resolution: {integrity: sha512-AyQIlgeD1uI3C/qjqBOare5kj9J4O/x85hkDckPiB13RY2Fem4bvkMOLQsLWSv79xlkVeLAx15PO7slGItiClQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   promise@7.3.1:
     resolution: {integrity: sha512-nolQXZ/4L+bP/UGlkfaIujX9BKxGwmQ9OT4mOt5yvy8iK1h3wqTEJCijzGANTCCl9nWjY41juyAn2K3Q1hLLTg==}
@@ -1873,6 +1888,10 @@ snapshots:
       path-root-regex: 0.1.2
 
   path-to-regexp@0.1.12: {}
+
+  pinata@2.5.1(react@19.2.0):
+    optionalDependencies:
+      react: 19.2.0
 
   promise@7.3.1:
     dependencies:
