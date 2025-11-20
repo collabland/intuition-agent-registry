@@ -60,6 +60,140 @@ export function normalizeFlatValues(
   return out;
 }
 
+function normalizeERC8004(input) {
+  const out = { ...input };
+
+  // Normalize endpoints
+  if (Array.isArray(out.endpoints)) {
+    out.endpoints.forEach(ep => {
+      if (!ep.name) return;
+      const prefix = `endpoint_${ep.name}`;
+
+      // direct values like "https://..."
+      if (ep.endpoint) out[prefix] = ep.endpoint;
+
+      // version
+      if (ep.version) out[`${prefix}_version`] = ep.version;
+
+      // if capabilities exist, store them as JSON (or break them out if desired)
+      if (ep.capabilities)
+        out[`${prefix}_capabilities`] = JSON.stringify(ep.capabilities);
+    });
+
+    delete out.endpoints;
+  }
+
+  // Normalize registrations
+  if (Array.isArray(out.registrations)) {
+    const chainIds = out.registrations
+      .map(reg => {
+        const parts = reg.agentRegistry?.split(":");
+        return parts?.[1];  // extract chainId
+      })
+      .filter(Boolean); // remove undefined/null
+
+    out.registrations = chainIds;
+  }
+
+  return out;
+}
+
+function extractERC8004Fields(input) {
+  const allowed = new Set([
+    "type",
+    "name",
+    "description",
+    "image",
+    "endpoints",
+    "registrations"
+  ]);
+
+  return Object.fromEntries(
+    Object.entries(input).filter(([key]) => allowed.has(key))
+  );
+};
+
+export async function prepareERC8004ForSync(input) {
+  const extracted = extractERC8004Fields(input);
+
+  const agentCard = await fetchAgentCardFromErc8004(input);
+  if (agentCard) {
+    const a2aFields = extractRelevantA2AFields(agentCard);
+    Object.assign(extracted, a2aFields);
+  }
+
+  const normalized = normalizeERC8004(extracted);
+
+  const flattened = flattenToOneLevel(normalized);
+
+  flattened['https://schema.org/keywords'] = [
+    'ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP', 
+    'ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky'
+  ];
+
+  return normalizeFlatValues(flattened);
+}
+
+/**
+ * Extracts and fetches the A2A agent card JSON from ERC8004 metadata.
+ * Assumes metadata has already been validated with isValidEIP8004.
+ * 
+ * @param metadata - Validated ERC8004 metadata object (not flattened)
+ * @returns The A2A agent card JSON, or null if no A2A endpoint exists or fetch fails
+ */
+export async function fetchAgentCardFromErc8004(
+  metadata: Record<string, unknown>
+): Promise<Record<string, unknown> | null> {
+  const endpoints = metadata.endpoints as any[];
+  
+  // Find first A2A endpoint
+  const a2aEndpoint = endpoints.find(
+    (endpoint) => endpoint.name === "A2A" && endpoint.endpoint
+  );
+
+  if (!a2aEndpoint) {
+    return null;
+  }
+
+  const a2aEndpointUrl = a2aEndpoint.endpoint;
+
+  // Fetch the A2A agent card JSON
+  try {
+    const a2aAgentCard = await fetchJsonFromUri(a2aEndpointUrl);
+    return a2aAgentCard;
+  } catch (error) {
+    return null; // Return null on fetch failure (non-blocking)
+  }
+}
+
+/**
+ * Extracts relevant fields from A2A agent card for syncing to Intuition.
+ * 
+ * @param a2aAgentCard - A2A agent card JSON object
+ * @returns Object with extracted fields (skill_tags and provider:organization)
+ */
+export function extractRelevantA2AFields(
+  a2aAgentCard: Record<string, unknown>
+): {
+  skill_tags: string[];
+  "provider:organization"?: string;
+} {
+  const result: {
+    skill_tags: string[];
+    "provider:organization"?: string;
+  } = {
+    skill_tags: collectSkillTagsFromData(a2aAgentCard),
+  };
+
+  // Extract provider organization if it exists
+  const provider = (a2aAgentCard as any).provider;
+  if (provider && typeof provider === "object" && provider.organization) {
+    result["provider_organization"] = provider.organization;
+  }
+
+  return result;
+}
+
 export function collectSkillTagsFromData(data: unknown): string[] {
   if (!data || typeof data !== "object") {
     return [];
@@ -247,3 +381,132 @@ export function mapAtomDetailsToAgentData(atomDetails: any): Record<string, any>
   return agentData;
 }
 
+/**
+ * Extracts and validates token URI from request body.
+ * Supports both raw string (text/plain) and JSON body formats.
+ * 
+ * @param body - Request body (can be string or object)
+ * @returns The validated token URI string
+ * @throws Error if token URI is missing or invalid
+ */
+export function extractTokenUriFromBody(body: unknown): string {
+  let tokenUri: string | undefined;
+
+  if (typeof body === "string") {
+    tokenUri = body.trim();
+  } else if (body && typeof body === "object") {
+    const obj = body as Record<string, unknown>;
+    if (typeof obj.tokenUri === "string") {
+      tokenUri = obj.tokenUri.trim();
+    }
+  }
+
+  if (!tokenUri) {
+    throw new Error("Expected JSON body: { tokenUri: string } or raw text/plain token URI");
+  }
+
+  try {
+    new URL(tokenUri);
+    return tokenUri;
+  } catch {
+    throw new Error("Token URI must be a valid URI (https:// or ipfs://)");
+  }
+}
+
+/**
+ * Fetches and validates JSON from a URI (supports https:// and ipfs://).
+ * Handles timeout, response validation, JSON parsing, and basic object validation.
+ * 
+ * @param uri - The URI to fetch JSON from
+ * @param timeoutMs - Timeout in milliseconds (default: 15000)
+ * @returns The validated JSON object
+ * @throws Error if fetch fails, timeout occurs, or JSON is invalid
+ */
+export async function fetchJsonFromUri(
+  uri: string,
+  timeoutMs: number = 15000
+): Promise<Record<string, unknown>> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  
+  let response: Response;
+  try {
+    response = await fetch(uri, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal as AbortSignal,
+    } as any);
+  } catch (error: any) {
+    clearTimeout(timeout);
+    if (error?.name === "AbortError") {
+      throw new Error(`Request to ${uri} timed out after ${timeoutMs}ms`);
+    }
+    throw new Error(`Failed to fetch ${uri}: ${error?.message || error}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response || !("ok" in response) || !response.ok) {
+    const status = (response as any)?.status ?? 502;
+    const statusText = (response as any)?.statusText ?? "Bad Gateway";
+    throw new Error(`Failed to fetch ${uri}: ${status} ${statusText}`);
+  }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error: any) {
+    throw new Error(`Expected JSON from ${uri} but could not parse: ${error?.message || error}`);
+  }
+
+  // Basic validation - ensure it's an object
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error(`Fetched data from ${uri} is not a JSON object`);
+  }
+
+  return data as Record<string, unknown>;
+}
+
+export function isValidEIP8004(file: unknown): string | null {
+  if (!file || typeof file !== "object") return null;
+
+  const requiredFields = ["type", "name", "description", "image", "endpoints", "registrations"];
+  for (const f of requiredFields) {
+    if (!(f in file)) return null;
+  }
+
+  // Validate endpoints
+  if (!Array.isArray((file as any).endpoints)) return null;
+  if ((file as any).endpoints.length > 0 && !(file as any).endpoints.every((e: any) =>
+    typeof e.name === "string" && typeof e.endpoint === "string"
+  )) return null;
+
+  // Validate registrations
+  if (!Array.isArray((file as any).registrations) || (file as any).registrations.length === 0) return null;
+  
+  const registrations = (file as any).registrations;
+  
+  // Validate each registration structure AND ensure Sepolia ETH registration exists
+  if (!registrations.every((r: any) =>
+    typeof r.agentId === "number" && 
+    typeof r.agentRegistry === "string" &&
+    r.agentRegistry.trim().length > 0
+  )) return null;
+  
+  const sepoliaChainId = 11155111;
+  const expectedContractAddress = process.env.AGENT_IDENTITY_CONTRACT_ADDRESS!;
+
+  // Ensure at least one Sepolia ETH registration exists
+  const expectedAgentRegistry = `eip155:${sepoliaChainId}:${expectedContractAddress}`;
+  const sepoliaRegistration = registrations.find((r: any) =>
+    r.agentRegistry?.toLowerCase() === expectedAgentRegistry.toLowerCase()
+  );
+
+  if (!sepoliaRegistration || typeof sepoliaRegistration !== "object") return null;
+
+  const reg = sepoliaRegistration as { agentId: number; agentRegistry: string };
+  const tokenId = String(reg.agentId);
+
+  // Format: chainId:contractAddress:tokenId
+  const nftId = `${sepoliaChainId}:${expectedContractAddress}:${tokenId}`;
+  return nftId;
+}

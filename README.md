@@ -281,6 +281,111 @@ Response (shape):
 }
 ```
 
+### Mother Open Registry Endpoints
+
+The Mother Open Registry provides specialized endpoints for registering and discovering agents using ERC8004 identity cards and NFT-based identifiers.
+
+#### Register ERC8004 Identity Card
+
+POST `/v1/mother/erc8004` accepts a token URI pointing to an ERC8004 identity card metadata. The endpoint validates the ERC8004 format, extracts the NFT ID from the metadata, fetches and merges A2A agent card data if available, and syncs the agent data to Intuition.
+
+**Request Body**: `text/plain` - A token URI (e.g., `https://ipfs.io/ipfs/...` or `ipfs://...`)
+
+```bash
+curl -X POST http://localhost:3001/v1/mother/erc8004 \
+  -H "Content-Type: text/plain" \
+  -H "x-api-key: $API_KEY" \
+  --data-binary 'https://ipfs.io/ipfs/Qm...'
+```
+
+**Success Response** (200 OK):
+```json
+{
+  "success": true,
+  "message": "ERC8004 identity card processed and synced",
+  "nftId": "11155111:0x...:123",
+  "timestamp": "2025-01-13T12:00:00.000Z"
+}
+```
+
+**Notes**:
+- The NFT must already be minted on Sepolia ETH (chain ID: 11155111)
+- The token URI must point to valid ERC8004 metadata JSON
+- A2A agent card data is automatically fetched and merged if an A2A endpoint is present
+- The NFT ID format is `chainId:contractAddress:tokenId`
+- Idempotent: re-syncing returns 200 with "already synced" message
+
+#### Get All Agents
+
+GET `/v1/mother/agents` retrieves all agents registered in the Mother Open Registry. Supports optional pagination.
+
+**Query Parameters**:
+- `page` (optional): Page number (defaults to 1 if provided)
+- `limit` (optional): Items per page (defaults to 20 if provided, max 100)
+- If neither `page` nor `limit` are provided, returns all agents
+
+# Get all agents
+```bash
+curl -X GET "http://localhost:3001/v1/mother/agents" \
+  -H "x-api-key: $API_KEY"
+
+# Get paginated results
+curl -X GET "http://localhost:3001/v1/mother/agents?page=1&limit=20" \
+  -H "x-api-key: $API_KEY"
+```
+
+**Success Response** (200 OK):
+```json
+{
+  "success": true,
+  "count": 2,
+  "total": 50,
+  "page": 1,
+  "limit": 20,
+  "totalPages": 3,
+  "agents": [
+    {
+      "nftId": "11155111:0x...:123",
+      "name": "My Agent",
+      "description": "...",
+      ...
+    }
+  ]
+}
+```
+
+#### Get Agent by NFT ID
+GET `/v1/mother/agent/:nftId` retrieves detailed information for a specific agent by its NFT ID.
+
+**Path Parameter**: `nftId` - The NFT identifier in format `chainId:contractAddress:tokenId`
+
+```bash
+curl -X GET "http://localhost:3001/v1/mother/agent/11155111:0x...:123" \
+  -H "x-api-key: $API_KEY"
+```
+
+**Success Response** (200 OK):
+```json
+{
+  "success": true,
+  "nftId": "11155111:0x...:123",
+  "agent": {
+    "name": "My Agent",
+    "description": "...",
+    ...
+  }
+}
+```
+
+**Error Response** (404 Not Found):
+```json
+{
+  "success": false,
+  "error": "Agent not found",
+  "message": "No atom found with subject: 11155111:0x...:123"
+}
+```
+
 ### Port and API key
 
 - Default port is 3001; set `PORT=3001` (or any) in `.env` to change.

@@ -1,76 +1,67 @@
-import { findAtomIds, sync } from '@0xintuition/sdk';
-import { intuitionConfig } from './setup';
-import { flattenToOneLevel, normalizeFlatValues, collectSkillTagsFromData, isAlreadyExistsError } from './utils.js';
-import { checkUrlExists, mintAgentIdentity } from './services/nft.js';
+import { sync } from '@0xintuition/sdk';
+import { intuitionConfig } from './setup.js';
+import {
+  isAlreadyExistsError,
+  fetchJsonFromUri,
+  isValidEIP8004,
+  prepareERC8004ForSync,
+} from './utils.js';
 
 async function main() {
-  const url = process.argv[2];
-  if (!url) {
-    throw new Error('Usage: tsx src/upload.ts <url>');
+  const tokenUri = process.argv[2];
+  if (!tokenUri) {
+    throw new Error('Usage: tsx src/upload.ts <token_uri>');
   }
 
-  console.log(`Fetching JSON from ${url}...`);
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
-  }
-  const payload = await response.json();
-
-  const flattened = flattenToOneLevel(payload);
-  flattened.skill_tags = collectSkillTagsFromData(payload);
-
-  // Check if URL already exists or mint new NFT (before normalizing)
-  let nftId: string;
-  const urlCheck = await checkUrlExists(url);
-
-  if (urlCheck.exists && urlCheck.nftId) {
-    nftId = urlCheck.nftId;
-    console.log(`NFT ID already exists: ${nftId}`);
-  } else {
-    console.log(`Minting new NFT for agent card URL: ${url}`);
-    const mintResult = await mintAgentIdentity(url);
-    nftId = mintResult.nftId;
-    console.log(`New NFT minted: ${nftId}`);
-  }
-
-  // Normalize after NFT check/mint
-  const normalized: Record<string, string | string[]> = normalizeFlatValues(flattened);
-
-  // Add required fields (order matches mother.ts)
-  normalized['agent_card_url'] = url;
-  normalized['https://schema.org/keywords'] = ['ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP', 'ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky'];
-
-  const data: Record<string, Record<string, string | string[]>> = {
-    [nftId]: normalized,
-  };
-
-  console.log('Syncing agent data from URL to blockchain...');
-  console.log(`  Source URL: ${url}`);
-  console.log(`  NFT ID (subject): ${nftId}`);
-
+  console.log(`Fetching ERC8004 metadata from ${tokenUri}...`);
+  
   try {
-    await sync(intuitionConfig, data);
-    console.log('Agent data fetched and synced successfully');
-  } catch (error: any) {
-    if (isAlreadyExistsError(error)) {
-      console.log('Idempotent no-op: data already exists');
-    } else {
-      throw error;
+    const metadata = await fetchJsonFromUri(tokenUri);
+    console.log('Metadata fetched successfully');
+
+    const nftId = isValidEIP8004(metadata);
+    
+    if (!nftId) {
+      throw new Error('Invalid ERC-8004 identity card: Metadata does not match ERC8004 specification');
     }
+
+    console.log(`NFT ID extracted: ${nftId}`);
+
+    console.log('Preparing data for sync (including A2A agent card fetch if available)...');
+    const prepared = await prepareERC8004ForSync(metadata);
+
+    // Construct sync data with NFT ID as subject
+    const syncData: Record<string, Record<string, string | string[]>> = {
+      [nftId]: prepared,
+    };
+
+    console.log('Syncing ERC8004 agent data to blockchain...');
+    console.log(`  Token URI: ${tokenUri}`);
+    console.log(`  NFT ID (subject): ${nftId}`);
+
+    try {
+      await sync(intuitionConfig, syncData);
+      console.log('ERC8004 identity card processed and synced successfully');
+    } catch (error: any) {
+      if (isAlreadyExistsError(error)) {
+        console.log('Idempotent no-op: ERC8004 identity card already synced');
+      } else {
+        throw error;
+      }
+    }
+  } catch (error: any) {
+    const aborted = error?.name === "AbortError";
+    if (aborted) {
+      console.error('Error: Upstream timeout while fetching metadata');
+    } else {
+      console.error('Error:', error.message || 'Unknown error occurred');
+    }
+    throw error;
   }
-
-  console.log('Finding atom ID for subject...');
-  const atomIds = await findAtomIds([nftId]);
-
-  if (atomIds.length === 0) {
-    console.log('No atom ID found for subject');
-    return;
-  }
-
-  console.log('Atom ID:', atomIds[0]);
-  console.log('Done.');
 }
 
-main().catch((e) => console.error(e));
-
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
 
