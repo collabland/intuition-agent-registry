@@ -3,237 +3,73 @@ import { Request, Response, Router, text } from "express";
 import { validateApiKey } from "../middleware/auth.js";
 import { account, intuitionConfig } from "../setup.js";
 import {
-  flattenToOneLevel,
-  normalizeFlatValues,
   isAlreadyExistsError,
   mapAtomDetailsToAgentData,
-  collectSkillTagsFromData,
+  extractTokenUriFromBody,
+  fetchJsonFromUri,
+  isValidEIP8004,
+  prepareERC8004ForSync,
 } from "../utils.js";
-import { checkUrlExists, mintAgentIdentity, isNftIdentifier } from "../services/nft.js";
+import { isNftIdentifier } from "../services/nft.js";
 
 const router = Router();
 
-type ProcessAgentOptions = {
-  agentCardUrl?: string;
-};
-
-async function processAgentPayload(
-  payload: Record<string, unknown>,
-  options: ProcessAgentOptions = {}
-): Promise<{ nftId: string; mintTransaction: string | null; timestamp: string }> {
-  const flatData = flattenToOneLevel(payload);
-  flatData.skill_tags = collectSkillTagsFromData(payload);
-
-  if (Object.keys(flatData).length === 0) {
-    throw new Error("Provided JSON object did not contain any usable key/value pairs");
-  }
-
-  const normalized: Record<string, string | string[]> = normalizeFlatValues(flatData);
-
-  const agentCardUrl = options.agentCardUrl;
-  if (agentCardUrl) {
-    normalized["agent_card_url"] = agentCardUrl;
-  } else {
-    delete normalized["agent_card_url"];
-  }
-
-  normalized["https://schema.org/keywords"] = [
-    "ipfs://QmRp1abVgPBgN5dSVfRsSpUWa8gUz5PhmSJMCLCSqDpvSP",
-    "ipfs://bafkreifdd5zbyg2k26bqftkdyjox52m6yx5ncgapkbt6pu3qqcu5wsktky",
-  ];
-
-  let nftId: string;
-  let mintTransactionHash: string | undefined;
-
-  if (agentCardUrl) {
-    const urlCheck = await checkUrlExists(agentCardUrl);
-    if (urlCheck.exists && urlCheck.nftId) {
-      nftId = urlCheck.nftId;
-      console.log("NFT ID already exists for provided agent_card_url:", nftId);
-    } else {
-      console.log(`Minting new NFT for agent_card_url: ${agentCardUrl}`);
-      const mintResult = await mintAgentIdentity(agentCardUrl);
-      nftId = mintResult.nftId;
-      mintTransactionHash = mintResult.transactionHash;
-      console.log("New NFT minted:", nftId);
-    }
-  } else {
-    console.log("Minting new NFT for raw JSON submission without agent_card_url");
-    const mintResult = await mintAgentIdentity("raw-json");
-    nftId = mintResult.nftId;
-    mintTransactionHash = mintResult.transactionHash;
-    console.log("New NFT minted:", nftId);
-  }
-
-  if (mintTransactionHash) {
-    normalized["mint_transaction_hash"] = mintTransactionHash;
-  }
-
-  const syncData: Record<string, Record<string, string | string[]>> = {
-    [nftId]: normalized,
-  };
-
-  console.log("Syncing agent data to blockchain...");
-  console.log("  NFT ID (subject):", nftId);
-
-  try {
-    await sync(intuitionConfig, syncData);
-    return {
-      nftId,
-      mintTransaction: mintTransactionHash ?? null,
-      timestamp: new Date().toISOString(),
-    };
-  } catch (error: any) {
-    if (isAlreadyExistsError(error)) {
-      return {
-        nftId,
-        mintTransaction: null,
-        timestamp: new Date().toISOString(),
-      };
-    }
-    throw error;
-  }
-}
-
-// POST /v1/mother - Accept raw JSON payloads, mint an NFT, and sync to Intuition
 router.post(
-  "/v1/mother",
-  validateApiKey,
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const payload = req.body as unknown;
-
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-        res.status(400).json({
-          success: false,
-          error: "Invalid payload",
-          message: "Expected a JSON object with key/value pairs",
-        });
-        return;
-      }
-
-      const result = await processAgentPayload(payload as Record<string, unknown>);
-
-      res.status(200).json({
-        success: true,
-        message: "Agent data received and synced",
-        ...result,
-      });
-      return;
-    } catch (error: any) {
-      console.error("Raw JSON agent sync error:", error);
-      res.status(500).json({
-        success: false,
-        error: "Sync failed",
-        message: error?.message || "Unknown error occurred",
-      });
-    }
-  }
-);
-
-// New endpoint: POST /v1/mother/agent
-// Body: { url: string } → fetches JSON from the URL, flattens with ':' joiner,
-// and syncs under the DID derived from SIGNER (account.address)
-router.post(
-  "/v1/mother/agent",
-  // Allow raw string bodies (text/plain) for direct URL payloads
+  "/v1/mother/erc8004",
   text({ type: "text/plain" }),
   validateApiKey,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      let url: string | undefined;
-      if (typeof (req.body as any) === "string") {
-        const candidate = (req.body as string).trim();
-        try {
-          // Validate URL format
-          // eslint-disable-next-line no-new
-          new URL(candidate);
-          url = candidate;
-        } catch {
-          res.status(400).json({
-            success: false,
-            error: "Invalid URL",
-            message: "When sending a raw string body, it must be a valid URL",
+      const tokenUri = extractTokenUriFromBody(req.body);
+
+      const metadata = await fetchJsonFromUri(tokenUri);
+      const nftId = isValidEIP8004(metadata);
+      
+      if (!nftId) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid ERC-8004 identity card",
+          message: "Metadata does not match ERC8004 specification"
+        });
+        return;
+      }
+
+      const prepared = await prepareERC8004ForSync(metadata);
+
+      // Construct sync data with NFT ID as subject
+      const syncData: Record<string, Record<string, string | string[]>> = {
+        [nftId]: prepared,
+      };
+
+      try {
+        await sync(intuitionConfig, syncData);
+        res.status(200).json({
+          success: true,
+          message: "ERC8004 identity card processed and synced",
+          nftId,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      } catch (error: any) {
+        if (isAlreadyExistsError(error)) {
+          res.status(200).json({
+            success: true,
+            message: "ERC8004 identity card already synced",
+            nftId,
+            timestamp: new Date().toISOString(),
           });
           return;
         }
-      } else {
-        const body = (req.body as any) ?? {};
-        url = typeof body?.url === "string" ? body.url : undefined;
-        if (!url) {
-          res.status(400).json({
-            success: false,
-            error: "Invalid payload",
-            message: "Expected JSON body: { url: string } or raw text/plain URL",
-          });
-          return;
-        }
+        throw error;
       }
-
-      // Fetch JSON from the provided URL with a simple timeout
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      let response;
-      try {
-        response = await fetch(url, {
-          headers: { Accept: "application/json" },
-          signal: controller.signal as AbortSignal,
-        } as any);
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      if (!response || !("ok" in response) || !(response as any).ok) {
-        const status = (response as any)?.status ?? 502;
-        const statusText = (response as any)?.statusText ?? "Bad Gateway";
-        res.status(502).json({
-          success: false,
-          error: "Upstream fetch failed",
-          message: `Failed to fetch ${url}: ${status} ${statusText}`,
-        });
-        return;
-      }
-
-      // Try to parse JSON regardless of content-type; surface parse errors cleanly
-      let data: unknown;
-      try {
-        data = await (response as any).json();
-      } catch (e: any) {
-        res.status(415).json({
-          success: false,
-          error: "Invalid upstream content",
-          message: `Expected JSON from URL but could not parse: ${e?.message || e}`,
-        });
-        return;
-      }
-
-      if (!data || typeof data !== "object") {
-        res.status(415).json({
-          success: false,
-          error: "Unsupported upstream data",
-          message: "Fetched payload is not a JSON object",
-        });
-        return;
-      }
-
-      const result = await processAgentPayload(data as Record<string, unknown>, {
-        agentCardUrl: url,
-      });
-
-      res.status(200).json({
-        success: true,
-        message: "Agent data fetched and synced",
-        ...result,
-      });
-      return;
     } catch (error: any) {
       const aborted = error?.name === "AbortError";
-      console.error("Agent URL sync error:", error);
+      console.error("ERC8004 identity card fetch error:", error);
 
-      res.status(aborted ? 504 : 500).json({
+      res.status(aborted ? 504: 500).json({
         success: false,
         error: aborted ? "Upstream timeout" : "Sync failed",
-        message: error.message || "Unknown error occurred",
+        message: error.message || "Unknown error occurred"
       });
     }
   }
